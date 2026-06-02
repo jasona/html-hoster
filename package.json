@@ -1,0 +1,13 @@
+{
+  "name": "html-hoster",
+  "version": "1.0.0",
+  "description": "A tiny private HTML page hoster with owner-scoped uploads.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

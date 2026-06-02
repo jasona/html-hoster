@@ -1,0 +1,376 @@
+:root {
+  color-scheme: light;
+  --bg: #f7f5f0;
+  --ink: #1e2524;
+  --muted: #6a716f;
+  --line: #dad5cb;
+  --panel: #fffdf8;
+  --accent: #176b5d;
+  --accent-strong: #0c4038;
+  --gold: #c68a25;
+  --danger: #a53b32;
+  --ok: #206f45;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.9), rgba(247, 245, 240, 0.96)),
+    repeating-linear-gradient(90deg, rgba(30, 37, 36, 0.035) 0 1px, transparent 1px 80px);
+  color: var(--ink);
+}
+
+a {
+  color: inherit;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: min(1100px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 20px 0;
+}
+
+.brand,
+nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand {
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fffdf8;
+}
+
+nav a,
+.owner {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+nav a.active,
+nav a:hover {
+  border-color: var(--line);
+  background: rgba(255, 253, 248, 0.72);
+  color: var(--ink);
+}
+
+.owner {
+  border-color: var(--line);
+  background: rgba(255, 253, 248, 0.72);
+}
+
+main {
+  width: min(1100px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 44px 0 80px;
+}
+
+.welcome {
+  background:
+    linear-gradient(125deg, rgba(23, 107, 93, 0.16), transparent 42%),
+    linear-gradient(320deg, rgba(198, 138, 37, 0.14), transparent 44%),
+    var(--bg);
+}
+
+.welcome-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(310px, 0.8fr);
+  align-items: center;
+  min-height: 100vh;
+  padding: 48px 0;
+  gap: 56px;
+}
+
+.intro h1,
+.empty h1,
+.panel h1,
+.upload-panel h1,
+.uploaded h1 {
+  max-width: 760px;
+  margin: 0;
+  font-size: clamp(34px, 7vw, 72px);
+  line-height: 0.96;
+  letter-spacing: 0;
+}
+
+.panel h1,
+.upload-panel h1,
+.uploaded h1 {
+  font-size: clamp(32px, 5vw, 56px);
+}
+
+.intro p:not(.eyebrow),
+.empty p,
+.drop-copy {
+  max-width: 620px;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.eyebrow {
+  margin: 0 0 14px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.name-card,
+.upload-form,
+.share-box,
+.file-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.9);
+  box-shadow: 0 18px 54px rgba(30, 37, 36, 0.08);
+}
+
+.name-card {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+}
+
+label {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+input[type="text"],
+.share-box input,
+.actions input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  padding: 13px 14px;
+}
+
+button,
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0 18px;
+  text-decoration: none;
+}
+
+button:hover,
+.button:hover {
+  background: var(--accent-strong);
+}
+
+.secondary {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.secondary:hover {
+  background: #fffdf8;
+}
+
+.error {
+  color: var(--danger);
+  margin: 0;
+}
+
+.success {
+  color: var(--ok);
+  margin: 0;
+}
+
+.empty,
+.panel,
+.upload-panel,
+.uploaded {
+  padding-top: 28px;
+}
+
+.empty {
+  display: grid;
+  gap: 22px;
+  justify-items: start;
+}
+
+.section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.file-list {
+  display: grid;
+  gap: 12px;
+}
+
+.file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.78fr);
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+}
+
+.file-row h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.file-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.actions,
+.share-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.share-box {
+  width: min(720px, 100%);
+  margin: 28px 0 18px;
+  padding: 10px;
+}
+
+.icon-link {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: white;
+  font-size: 20px;
+  text-decoration: none;
+}
+
+.upload-form {
+  display: grid;
+  gap: 18px;
+  width: min(680px, 100%);
+  margin-top: 28px;
+  padding: 18px;
+}
+
+.dropzone {
+  display: grid;
+  place-items: center;
+  min-height: 260px;
+  border: 1px dashed #a8a195;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 28px;
+  text-align: center;
+}
+
+.dropzone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.upload-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  background: #efe8da;
+  color: var(--accent);
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.drop-title {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 22px;
+  font-weight: 850;
+}
+
+.dropzone.has-file {
+  border-color: var(--accent);
+  background: #f7fbf8;
+}
+
+@media (max-width: 720px) {
+  .topbar,
+  .section-head,
+  .file-row,
+  .welcome-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar,
+  .section-head {
+    align-items: flex-start;
+  }
+
+  .topbar {
+    flex-direction: column;
+  }
+
+  nav {
+    flex-wrap: wrap;
+  }
+
+  .file-row {
+    display: grid;
+  }
+
+  .actions,
+  .share-box {
+    align-items: stretch;
+  }
+}
