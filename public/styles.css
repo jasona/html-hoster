@@ -219,6 +219,14 @@ button:hover,
   margin: 0;
 }
 
+.banner {
+  margin: 0 0 16px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.72);
+  padding: 12px 14px;
+}
+
 .empty,
 .panel,
 .upload-panel,
@@ -269,6 +277,38 @@ button:hover,
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.replace-form {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.replace-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.replace-button,
+.replace-submit {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.replace-button {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.replace-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .share-box {
@@ -372,5 +412,10 @@ button:hover,
   .actions,
   .share-box {
     align-items: stretch;
+  }
+
+  .actions,
+  .replace-form {
+    flex-wrap: wrap;
   }
 }

@@ -9,3 +9,17 @@ if (input && dropzone && title) {
     if (file) title.textContent = file.name;
   });
 }
+
+document.querySelectorAll(".replace-form").forEach((form) => {
+  const replaceInput = form.querySelector(".replace-input");
+  const replaceSubmit = form.querySelector(".replace-submit");
+  const replaceButton = form.querySelector(".replace-button");
+
+  if (!replaceInput || !replaceSubmit || !replaceButton) return;
+
+  replaceInput.addEventListener("change", () => {
+    const file = replaceInput.files?.[0];
+    replaceSubmit.disabled = !file;
+    replaceButton.textContent = file ? file.name : "Choose";
+  });
+});

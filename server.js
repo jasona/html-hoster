@@ -159,22 +159,36 @@ function emptyState() {
   </section>`;
 }
 
-function fileList(user, pages) {
+function statusBanner(message, kind = "success") {
+  if (!message) return "";
+  return `<p class="${kind} banner">${escapeHtml(message)}</p>`;
+}
+
+function fileList(user, pages, message = "", kind = "success") {
   if (!pages.length) return emptyState();
   const rows = pages
     .slice()
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .map((page) => {
       const url = `/${user}/${page.slug}.html`;
-      const created = new Date(page.createdAt).toLocaleString();
+      const timestamp = page.updatedAt || page.createdAt;
+      const dateLabel = page.updatedAt ? "Updated" : "Created";
+      const created = new Date(timestamp).toLocaleString();
+      const replaceId = `replace-${page.slug}`;
       return `<article class="file-row">
         <div>
           <h2>${escapeHtml(page.originalName)}</h2>
-          <p>${escapeHtml(created)}</p>
+          <p>${dateLabel} ${escapeHtml(created)}</p>
         </div>
         <div class="actions">
           <input readonly value="${escapeHtml(url)}" aria-label="Share URL for ${escapeHtml(page.originalName)}">
           <a class="icon-link" href="${escapeHtml(url)}" title="Open page" aria-label="Open page">↗</a>
+          <form class="replace-form" method="post" action="/replace" enctype="multipart/form-data">
+            <input type="hidden" name="slug" value="${escapeHtml(page.slug)}">
+            <label class="button secondary replace-button" for="${escapeHtml(replaceId)}">Choose</label>
+            <input id="${escapeHtml(replaceId)}" class="replace-input" name="htmlFile" type="file" accept=".html,text/html" required>
+            <button class="replace-submit" type="submit" disabled>Replace</button>
+          </form>
         </div>
       </article>`;
     })
@@ -188,8 +202,10 @@ function fileList(user, pages) {
       </div>
       <a class="button" href="/upload">Upload</a>
     </div>
+    ${statusBanner(message, kind)}
     <div class="file-list">${rows}</div>
-  </section>`;
+  </section>
+  <script src="/assets/upload.js"></script>`;
 }
 
 function uploadPage(user, message = "") {
@@ -319,16 +335,11 @@ async function handleSetup(req, res) {
 async function handleUpload(req, res, user) {
   const contentType = req.headers["content-type"] || "";
   const parts = parseMultipart(await readBody(req), contentType);
-  const upload = parts.find((part) => part.name === "htmlFile" && part.filename);
-
-  if (!upload) return send(res, 400, uploadPage(user, "Choose an HTML file first."));
-  if (!upload.filename.toLowerCase().endsWith(".html")) {
-    return send(res, 400, uploadPage(user, "Only .html files can be uploaded."));
-  }
-
-  const textStart = upload.content.slice(0, 2048).toString("utf8").toLowerCase();
-  if (!textStart.includes("<html") && !textStart.includes("<!doctype html")) {
-    return send(res, 400, uploadPage(user, "That file does not look like an HTML document."));
+  let upload;
+  try {
+    upload = validateHtmlUpload(parts.find((part) => part.name === "htmlFile" && part.filename));
+  } catch (error) {
+    return send(res, error.statusCode || 400, uploadPage(user, error.message));
   }
 
   const index = await ensureUser(user);
@@ -345,6 +356,72 @@ async function handleUpload(req, res, user) {
   await saveIndex(user, index);
 
   send(res, 201, uploadedPage(user, page));
+}
+
+function validateHtmlUpload(upload) {
+  if (!upload) {
+    const error = new Error("Choose an HTML file first.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!upload.filename.toLowerCase().endsWith(".html")) {
+    const error = new Error("Only .html files can be uploaded.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const textStart = upload.content.slice(0, 2048).toString("utf8").toLowerCase();
+  if (!textStart.includes("<html") && !textStart.includes("<!doctype html")) {
+    const error = new Error("That file does not look like an HTML document.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return upload;
+}
+
+async function handleReplace(req, res, user) {
+  const contentType = req.headers["content-type"] || "";
+  const parts = parseMultipart(await readBody(req), contentType);
+  const slug = parts.find((part) => part.name === "slug")?.content.toString("utf8").trim();
+  const index = await ensureUser(user);
+  let upload;
+  try {
+    upload = validateHtmlUpload(parts.find((part) => part.name === "htmlFile" && part.filename));
+  } catch (error) {
+    return send(res, error.statusCode || 400, layout({
+      title: "Files",
+      user,
+      body: fileList(user, index.pages, error.message, "error")
+    }));
+  }
+
+  if (!/^[a-z0-9-]+$/.test(slug || "")) {
+    return send(res, 400, layout({
+      title: "Files",
+      user,
+      body: fileList(user, index.pages, "Choose an existing page to replace.", "error")
+    }));
+  }
+
+  const page = index.pages.find((candidate) => candidate.slug === slug);
+  if (!page) {
+    return send(res, 404, layout({
+      title: "Files",
+      user,
+      body: fileList(user, index.pages, "That page does not belong to this owner.", "error")
+    }));
+  }
+
+  await fs.writeFile(path.join(DATA_DIR, "users", user, `${slug}.html`), upload.content);
+
+  page.originalName = path.basename(upload.filename);
+  page.bytes = upload.content.length;
+  page.updatedAt = new Date().toISOString();
+  await saveIndex(user, index);
+
+  redirect(res, `/?replaced=${encodeURIComponent(slug)}`);
 }
 
 async function serveStatic(req, res, pathname) {
@@ -403,11 +480,14 @@ async function route(req, res) {
 
   if (req.method === "GET" && pathname === "/") {
     const index = await ensureUser(user);
-    return send(res, 200, layout({ title: "Files", user, body: fileList(user, index.pages) }));
+    const replaced = url.searchParams.get("replaced");
+    const message = replaced ? "File replaced. The share URL stayed the same." : "";
+    return send(res, 200, layout({ title: "Files", user, body: fileList(user, index.pages, message) }));
   }
 
   if (req.method === "GET" && pathname === "/upload") return send(res, 200, uploadPage(user));
   if (req.method === "POST" && pathname === "/upload") return handleUpload(req, res, user);
+  if (req.method === "POST" && pathname === "/replace") return handleReplace(req, res, user);
 
   send(res, 404, layout({
     title: "Not found",
