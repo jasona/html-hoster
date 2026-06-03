@@ -8,7 +8,9 @@ A tiny Gist-like host for standalone HTML files.
 npm start
 ```
 
-Open `http://localhost:3000`, enter your first name once, then visit `/upload` to upload an `.html` file. Uploaded pages get URLs like `/jason/flower-purple-hat.html`.
+Open `http://localhost:3000`, enter your first name and password, then visit `/upload` to upload an `.html` file. Uploaded pages get URLs like `/jason/flower-purple-hat.html`.
+
+Passwords are stored as salted `scrypt` hashes in each owner's data directory, so a returning owner can re-authenticate if their browser cookie is gone.
 
 ## Docker
 

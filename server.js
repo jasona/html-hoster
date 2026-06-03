@@ -2,12 +2,15 @@ const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const http = require("node:http");
 const path = require("node:path");
+const { promisify } = require("node:util");
 const { URL } = require("node:url");
 
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const MAX_UPLOAD_BYTES = 1024 * 1024 * Number(process.env.MAX_UPLOAD_MB || 5);
+const PASSWORD_KEY_LENGTH = 64;
+const scrypt = promisify(crypto.scrypt);
 
 const WORDS_A = [
   "amber", "bright", "cedar", "crimson", "dawn", "ember", "flower", "glimmer",
@@ -74,7 +77,7 @@ function cookieForUser(user) {
 }
 
 async function ensureUser(user) {
-  const dir = path.join(DATA_DIR, "users", user);
+  const dir = userDir(user);
   await fs.mkdir(dir, { recursive: true });
   const indexPath = path.join(dir, "index.json");
   try {
@@ -90,6 +93,52 @@ async function ensureUser(user) {
 async function saveIndex(user, index) {
   const indexPath = path.join(DATA_DIR, "users", user, "index.json");
   await fs.writeFile(indexPath, JSON.stringify(index, null, 2));
+}
+
+function userDir(user) {
+  return path.join(DATA_DIR, "users", user);
+}
+
+function authPath(user) {
+  return path.join(userDir(user), "auth.json");
+}
+
+async function loadAuth(user) {
+  try {
+    return JSON.parse(await fs.readFile(authPath(user), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function createPasswordAuth(user, password) {
+  const salt = crypto.randomBytes(16);
+  const hash = await scrypt(password, salt, PASSWORD_KEY_LENGTH);
+  await fs.mkdir(userDir(user), { recursive: true });
+  try {
+    await fs.writeFile(authPath(user), JSON.stringify({
+      algorithm: "scrypt",
+      keyLength: PASSWORD_KEY_LENGTH,
+      salt: salt.toString("base64"),
+      hash: Buffer.from(hash).toString("base64"),
+      createdAt: new Date().toISOString()
+    }, null, 2), { flag: "wx" });
+    return true;
+  } catch (error) {
+    if (error.code === "EEXIST") return false;
+    throw error;
+  }
+}
+
+async function verifyPassword(user, password) {
+  const auth = await loadAuth(user);
+  if (!auth) return null;
+  if (auth.algorithm !== "scrypt" || !auth.salt || !auth.hash) return false;
+
+  const expected = Buffer.from(auth.hash, "base64");
+  const actual = await scrypt(password, Buffer.from(auth.salt, "base64"), auth.keyLength || PASSWORD_KEY_LENGTH);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
 function layout({ title, user, body, active = "home" }) {
@@ -137,11 +186,13 @@ function welcomePage(error = "") {
     <section class="intro">
       <p class="eyebrow">Private by habit, public by link</p>
       <h1>Host a tiny HTML page and share one clean URL.</h1>
-      <p>Your first name becomes your owner key on this browser. Uploads stay simple, portable, and easy to run in a Docker container.</p>
+      <p>Your first name becomes your owner key. Add a password once, then use it whenever you need to recover access on a fresh browser.</p>
     </section>
     <form class="name-card" method="post" action="/setup">
       <label for="firstName">First name</label>
       <input id="firstName" name="firstName" type="text" autocomplete="given-name" placeholder="Jason" required maxlength="40" autofocus>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8">
       ${errorHtml}
       <button type="submit">Continue</button>
     </form>
@@ -327,7 +378,22 @@ function isOwnerPath(pathname) {
 async function handleSetup(req, res) {
   const body = parseFormUrlEncoded(await readBody(req));
   const user = slugifyName(body.firstName);
+  const password = String(body.password || "");
   if (!user) return send(res, 400, welcomePage("Use at least one letter or number."));
+  if (password.length < 8) return send(res, 400, welcomePage("Use a password with at least 8 characters."));
+
+  const passwordMatches = await verifyPassword(user, password);
+  if (passwordMatches === false) {
+    return send(res, 401, welcomePage("That password does not match this owner."));
+  }
+
+  if (passwordMatches === null) {
+    const created = await createPasswordAuth(user, password);
+    if (!created && !(await verifyPassword(user, password))) {
+      return send(res, 401, welcomePage("That password does not match this owner."));
+    }
+  }
+
   await ensureUser(user);
   redirect(res, "/", { "Set-Cookie": cookieForUser(user) });
 }
