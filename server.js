@@ -73,7 +73,7 @@ function parseCookies(header = "") {
 
 function cookieForUser(user) {
   const encoded = encodeURIComponent(user);
-  return `html_hoster_user=${encoded}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`;
+  return `sitepaste_user=${encoded}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`;
 }
 
 async function ensureUser(user) {
@@ -151,14 +151,14 @@ function layout({ title, user, body, active = "home" }) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(title)} · HTML Hoster</title>
+  <title>${escapeHtml(title)} · SitePaste.app</title>
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="HTML Hoster home">
-      <span class="brand-mark">H</span>
-      <span>HTML Hoster</span>
+    <a class="brand" href="/" aria-label="SitePaste.app home">
+      <span class="brand-mark">S</span>
+      <span>SitePaste.app</span>
     </a>
     <nav aria-label="Primary">
       <a class="${homeActive}" href="/">Files</a>
@@ -178,14 +178,14 @@ function welcomePage(error = "") {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Welcome · HTML Hoster</title>
+  <title>Welcome · SitePaste.app</title>
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body class="welcome">
   <main class="welcome-shell">
     <section class="intro">
-      <p class="eyebrow">Private by habit, public by link</p>
-      <h1>Host a tiny HTML page and share one clean URL.</h1>
+      <p class="eyebrow">SitePaste.app</p>
+      <h1>Paste an HTML page and share one clean URL.</h1>
       <p>Your first name becomes your owner key. Add a password once, then use it whenever you need to recover access on a fresh browser.</p>
     </section>
     <form class="name-card" method="post" action="/setup">
@@ -204,9 +204,9 @@ function welcomePage(error = "") {
 function emptyState() {
   return `<section class="empty">
     <p class="eyebrow">No pages yet</p>
-    <h1>Your shared HTML pages will appear here.</h1>
+    <h1>Your SitePaste pages will appear here.</h1>
     <p>Use the hidden upload URL whenever you want to add another standalone page.</p>
-    <a class="button" href="/upload">Upload HTML</a>
+    <a class="button" href="/upload">Upload Page</a>
   </section>`;
 }
 
@@ -249,7 +249,7 @@ function fileList(user, pages, message = "", kind = "success") {
     <div class="section-head">
       <div>
         <p class="eyebrow">Your files</p>
-        <h1>${pages.length} hosted page${pages.length === 1 ? "" : "s"}</h1>
+        <h1>${pages.length} pasted page${pages.length === 1 ? "" : "s"}</h1>
       </div>
       <a class="button" href="/upload">Upload</a>
     </div>
@@ -541,7 +541,7 @@ async function route(req, res) {
   if (req.method === "POST" && pathname === "/setup") return handleSetup(req, res);
 
   const cookies = parseCookies(req.headers.cookie);
-  const user = slugifyName(cookies.html_hoster_user);
+  const user = slugifyName(cookies.sitepaste_user);
   if (!user) return send(res, 200, welcomePage());
 
   if (req.method === "GET" && pathname === "/") {
@@ -574,5 +574,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`HTML Hoster listening on http://localhost:${PORT}`);
+  console.log(`SitePaste.app listening on http://localhost:${PORT}`);
 });

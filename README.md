@@ -1,6 +1,6 @@
-# HTML Hoster
+# SitePaste.app
 
-A tiny Gist-like host for standalone HTML files.
+A tiny Gist-like pastebin for standalone HTML pages.
 
 ## Run locally
 
@@ -15,8 +15,8 @@ Passwords are stored as salted `scrypt` hashes in each owner's data directory, s
 ## Docker
 
 ```sh
-docker build -t html-hoster .
-docker run -p 3000:3000 -v html-hoster-data:/app/data html-hoster
+docker build -t sitepaste .
+docker run -p 3000:3000 -v sitepaste-data:/app/data sitepaste
 ```
 
 For Coolify, deploy the repository as a Docker app and mount persistent storage at `/app/data`.

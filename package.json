@@ -1,7 +1,7 @@
 {
-  "name": "html-hoster",
+  "name": "sitepaste",
   "version": "1.0.0",
-  "description": "A tiny private HTML page hoster with owner-scoped uploads.",
+  "description": "A tiny private pastebin for shareable standalone HTML pages.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
