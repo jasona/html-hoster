@@ -1,31 +1,27 @@
-const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const http = require("node:http");
 const path = require("node:path");
-const { promisify } = require("node:util");
 const { URL } = require("node:url");
+const {
+  MAX_UPLOAD_BYTES,
+  slugifyName,
+  userDir,
+  ensureUser,
+  saveIndex,
+  uniquePageSlug,
+  validateHtmlUpload
+} = require("./lib/store");
+const {
+  createPasswordAuth,
+  verifyPassword,
+  createApiKey,
+  hasApiKey
+} = require("./lib/auth");
+const { handleApiRequest } = require("./lib/api");
+const { handleMcpRequest } = require("./lib/mcp");
 
 const PORT = Number(process.env.PORT || 3000);
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const PUBLIC_DIR = path.join(__dirname, "public");
-const MAX_UPLOAD_BYTES = 1024 * 1024 * Number(process.env.MAX_UPLOAD_MB || 5);
-const PASSWORD_KEY_LENGTH = 64;
-const scrypt = promisify(crypto.scrypt);
-
-const WORDS_A = [
-  "amber", "bright", "cedar", "crimson", "dawn", "ember", "flower", "glimmer",
-  "honey", "indigo", "juniper", "kind", "linen", "meadow", "neon", "opal",
-  "paper", "quiet", "river", "silver", "sunny", "tender", "violet", "willow"
-];
-const WORDS_B = [
-  "apple", "bloom", "cloud", "door", "fern", "garden", "harbor", "island",
-  "jacket", "kite", "lantern", "maple", "notebook", "orbit", "pearl", "quilt",
-  "ribbon", "stone", "table", "umbrella", "velvet", "window", "yarn", "zinnia"
-];
-const WORDS_C = [
-  "arc", "badge", "cap", "desk", "echo", "frame", "hat", "ink", "jar", "key",
-  "lamp", "moon", "nest", "path", "ring", "shell", "tile", "vase", "wave", "zip"
-];
 
 function send(res, status, body, headers = {}) {
   res.writeHead(status, {
@@ -49,15 +45,6 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-function slugifyName(name) {
-  return String(name || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
-}
-
 function parseCookies(header = "") {
   return Object.fromEntries(
     header.split(";")
@@ -74,71 +61,6 @@ function parseCookies(header = "") {
 function cookieForUser(user) {
   const encoded = encodeURIComponent(user);
   return `sitepaste_user=${encoded}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`;
-}
-
-async function ensureUser(user) {
-  const dir = userDir(user);
-  await fs.mkdir(dir, { recursive: true });
-  const indexPath = path.join(dir, "index.json");
-  try {
-    return JSON.parse(await fs.readFile(indexPath, "utf8"));
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-    const fresh = { user, pages: [] };
-    await fs.writeFile(indexPath, JSON.stringify(fresh, null, 2));
-    return fresh;
-  }
-}
-
-async function saveIndex(user, index) {
-  const indexPath = path.join(DATA_DIR, "users", user, "index.json");
-  await fs.writeFile(indexPath, JSON.stringify(index, null, 2));
-}
-
-function userDir(user) {
-  return path.join(DATA_DIR, "users", user);
-}
-
-function authPath(user) {
-  return path.join(userDir(user), "auth.json");
-}
-
-async function loadAuth(user) {
-  try {
-    return JSON.parse(await fs.readFile(authPath(user), "utf8"));
-  } catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw error;
-  }
-}
-
-async function createPasswordAuth(user, password) {
-  const salt = crypto.randomBytes(16);
-  const hash = await scrypt(password, salt, PASSWORD_KEY_LENGTH);
-  await fs.mkdir(userDir(user), { recursive: true });
-  try {
-    await fs.writeFile(authPath(user), JSON.stringify({
-      algorithm: "scrypt",
-      keyLength: PASSWORD_KEY_LENGTH,
-      salt: salt.toString("base64"),
-      hash: Buffer.from(hash).toString("base64"),
-      createdAt: new Date().toISOString()
-    }, null, 2), { flag: "wx" });
-    return true;
-  } catch (error) {
-    if (error.code === "EEXIST") return false;
-    throw error;
-  }
-}
-
-async function verifyPassword(user, password) {
-  const auth = await loadAuth(user);
-  if (!auth) return null;
-  if (auth.algorithm !== "scrypt" || !auth.salt || !auth.hash) return false;
-
-  const expected = Buffer.from(auth.hash, "base64");
-  const actual = await scrypt(password, Buffer.from(auth.salt, "base64"), auth.keyLength || PASSWORD_KEY_LENGTH);
-  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
 function layout({ title, user, body, active = "home" }) {
@@ -163,6 +85,7 @@ function layout({ title, user, body, active = "home" }) {
     <nav aria-label="Primary">
       <a class="${homeActive}" href="/">Files</a>
       <a class="${uploadActive}" href="/upload">Upload</a>
+      <a href="/account">API</a>
       ${owner}
     </nav>
   </header>
@@ -301,6 +224,47 @@ function uploadedPage(user, page) {
   });
 }
 
+function accountPage(user, keyExists) {
+  const status = keyExists
+    ? `<p>You have an active API key. Generating a new one immediately invalidates it.</p>`
+    : `<p>You don't have an API key yet. Generate one to use the REST API or the MCP server.</p>`;
+  return layout({
+    title: "API access",
+    user,
+    active: "account",
+    body: `<section class="upload-panel">
+      <p class="eyebrow">API &amp; MCP access</p>
+      <h1>Programmatic access for ${escapeHtml(user)}.</h1>
+      ${status}
+      <form method="post" action="/account/api-key">
+        <button type="submit">${keyExists ? "Regenerate key" : "Generate key"}</button>
+      </form>
+    </section>`
+  });
+}
+
+function apiKeyIssuedPage(user, key) {
+  return layout({
+    title: "API key",
+    user,
+    active: "account",
+    body: `<section class="uploaded">
+      <p class="eyebrow">Copy it now</p>
+      <h1>Your new API key</h1>
+      <div class="share-box">
+        <input readonly value="${escapeHtml(key)}" aria-label="API key">
+      </div>
+      <p>This key will not be shown again. Use it as a Bearer token against the REST API (<code>/api/v1/sites</code>) or the MCP endpoint (<code>/mcp</code>).</p>
+      <a class="button secondary" href="/account">Back to API access</a>
+    </section>`
+  });
+}
+
+async function handleGenerateApiKey(req, res, user) {
+  const key = await createApiKey(user);
+  send(res, 201, apiKeyIssuedPage(user, key));
+}
+
 async function readBody(req) {
   const chunks = [];
   let total = 0;
@@ -354,23 +318,6 @@ function parseMultipart(buffer, contentType) {
   return parts;
 }
 
-function randomFrom(values) {
-  return values[crypto.randomInt(values.length)];
-}
-
-async function uniquePageSlug(user) {
-  const userDir = path.join(DATA_DIR, "users", user);
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const slug = `${randomFrom(WORDS_A)}-${randomFrom(WORDS_B)}-${randomFrom(WORDS_C)}`;
-    try {
-      await fs.access(path.join(userDir, `${slug}.html`));
-    } catch {
-      return slug;
-    }
-  }
-  return crypto.randomBytes(8).toString("hex");
-}
-
 function isOwnerPath(pathname) {
   return /^\/[a-z0-9-]+\/[a-z0-9-]+\.html$/.test(pathname);
 }
@@ -410,7 +357,7 @@ async function handleUpload(req, res, user) {
 
   const index = await ensureUser(user);
   const slug = await uniquePageSlug(user);
-  await fs.writeFile(path.join(DATA_DIR, "users", user, `${slug}.html`), upload.content);
+  await fs.writeFile(path.join(userDir(user), `${slug}.html`), upload.content);
 
   const page = {
     slug,
@@ -422,29 +369,6 @@ async function handleUpload(req, res, user) {
   await saveIndex(user, index);
 
   send(res, 201, uploadedPage(user, page));
-}
-
-function validateHtmlUpload(upload) {
-  if (!upload) {
-    const error = new Error("Choose an HTML file first.");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (!upload.filename.toLowerCase().endsWith(".html")) {
-    const error = new Error("Only .html files can be uploaded.");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const textStart = upload.content.slice(0, 2048).toString("utf8").toLowerCase();
-  if (!textStart.includes("<html") && !textStart.includes("<!doctype html")) {
-    const error = new Error("That file does not look like an HTML document.");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  return upload;
 }
 
 async function handleReplace(req, res, user) {
@@ -480,7 +404,7 @@ async function handleReplace(req, res, user) {
     }));
   }
 
-  await fs.writeFile(path.join(DATA_DIR, "users", user, `${slug}.html`), upload.content);
+  await fs.writeFile(path.join(userDir(user), `${slug}.html`), upload.content);
 
   page.originalName = path.basename(upload.filename);
   page.bytes = upload.content.length;
@@ -515,7 +439,7 @@ async function serveStatic(req, res, pathname) {
 async function serveHostedPage(req, res, pathname) {
   const [, user, file] = pathname.split("/");
   const slug = file.replace(/\.html$/, "");
-  const filePath = path.join(DATA_DIR, "users", user, `${slug}.html`);
+  const filePath = path.join(userDir(user), `${slug}.html`);
   try {
     const body = await fs.readFile(filePath);
     res.writeHead(200, {
@@ -537,6 +461,8 @@ async function route(req, res) {
   const pathname = decodeURIComponent(url.pathname);
 
   if (pathname.startsWith("/assets/")) return serveStatic(req, res, pathname);
+  if (pathname.startsWith("/api/")) return handleApiRequest(req, res, pathname);
+  if (pathname === "/mcp") return handleMcpRequest(req, res);
   if (req.method === "GET" && isOwnerPath(pathname)) return serveHostedPage(req, res, pathname);
   if (req.method === "POST" && pathname === "/setup") return handleSetup(req, res);
 
@@ -554,6 +480,11 @@ async function route(req, res) {
   if (req.method === "GET" && pathname === "/upload") return send(res, 200, uploadPage(user));
   if (req.method === "POST" && pathname === "/upload") return handleUpload(req, res, user);
   if (req.method === "POST" && pathname === "/replace") return handleReplace(req, res, user);
+
+  if (req.method === "GET" && pathname === "/account") {
+    return send(res, 200, accountPage(user, await hasApiKey(user)));
+  }
+  if (req.method === "POST" && pathname === "/account/api-key") return handleGenerateApiKey(req, res, user);
 
   send(res, 404, layout({
     title: "Not found",
